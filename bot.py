@@ -131,7 +131,7 @@ async def main():
     async with async_playwright() as p:
         browser = await p.firefox.launch(headless=True)
         
-        # الآن نفتح المواقع واحداً تلو الآخر (بدون زحام)
+        # التعديل هنا: فتح صفحة جديدة لكل موقع لتجنب التزاحم
         print("جاري فحص Nepremicnine...")
         all_ads.extend(await scrape_nepremicnine(browser))
         print("جاري فحص Kamrica...")
