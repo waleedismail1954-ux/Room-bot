@@ -20,7 +20,7 @@ def is_valid_room(title):
             return False
     return True
 
-# دالة جديدة لتنظيف النصوص والروابط من أي أسطر مخفية
+# دالة جديدة لتنظيف النصوص والروابط من أي أسطر مخفية تسبب الخطأ
 def clean_text(text):
     if not text:
         return ""
