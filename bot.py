@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sqlite3
+import re
 from datetime import datetime
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
@@ -20,11 +21,17 @@ def is_valid_room(title):
             return False
     return True
 
-# دالة جديدة لتنظيف النصوص والروابط من أي أسطر مخفية تسبب الخطأ
+# دالة تنظيف الروابط: تمسح أي مسافة أو سطر أو رمز مخفي من الرابط
+def clean_url(url):
+    if not url:
+        return ""
+    return re.sub(r'\s+', '', url) 
+
+# دالة تنظيف النصوص العادية
 def clean_text(text):
     if not text:
         return ""
-    return text.replace("\n", "").replace("\r", "").strip()
+    return text.replace("\n", " ").replace("\r", " ").strip()
 
 async def scrape_nepremicnine(browser):
     ads = []
@@ -36,7 +43,7 @@ async def scrape_nepremicnine(browser):
         for listing in await page.query_selector_all("div.oglas_container"):
             link_el = await listing.query_selector("a")
             if not link_el: continue
-            href = clean_text(await link_el.get_attribute("href"))
+            href = clean_url(await link_el.get_attribute("href"))
             title_el = await listing.query_selector("span.title")
             title = clean_text(await title_el.inner_text()) if title_el else "Soba"
             if href and is_valid_room(title):
@@ -55,7 +62,7 @@ async def scrape_kamrica(browser):
         await page.goto(url, timeout=60000)
         await page.wait_for_selector("a[href*='/properties/']", timeout=60000)
         for link_el in await page.query_selector_all("a[href*='/properties/']"):
-            href = clean_text(await link_el.get_attribute("href"))
+            href = clean_url(await link_el.get_attribute("href"))
             if href and href.count("/") > 3:
                 title = clean_text(await link_el.inner_text()) or "غرفة في Kamrica"
                 if is_valid_room(title):
@@ -75,7 +82,7 @@ async def scrape_housinganywhere(browser):
         await page.wait_for_selector("a[href*='/room/']", timeout=60000)
         seen = set()
         for link_el in await page.query_selector_all("a[href*='/room/']"):
-            href = clean_text(await link_el.get_attribute("href"))
+            href = clean_url(await link_el.get_attribute("href"))
             if href and href not in seen:
                 seen.add(href)
                 title = clean_text(await link_el.inner_text())[:80] or "غرفة في HousingAnywhere"
@@ -96,7 +103,7 @@ async def scrape_bolha(browser):
         await page.wait_for_selector("a[href*='/oglas/']", timeout=60000)
         seen = set()
         for link_el in await page.query_selector_all("a[href*='/oglas/']"):
-            href = clean_text(await link_el.get_attribute("href"))
+            href = clean_url(await link_el.get_attribute("href"))
             if href and href not in seen:
                 seen.add(href)
                 title = clean_text(await link_el.inner_text())[:80] or "غرفة في Bolha"
