@@ -2,7 +2,8 @@ name: Room Alert Bot
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # يعمل كل 15 دقيقة
+    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 jobs:
