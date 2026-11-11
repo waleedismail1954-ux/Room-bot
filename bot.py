@@ -1,13 +1,13 @@
 import asyncio
 import os
 import sqlite3
+import re
 from datetime import datetime
 from urllib.parse import urljoin
 from playwright.async_api import async_playwright
 from telegram import Bot
 from telegram.constants import ParseMode
 
-# هنا تم إضافة .strip() لمسح أي مسافات أو أسطر مخفية
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"].strip()
 CHAT_ID = os.environ["CHAT_ID"].strip()
 DB_FILE = "seen_ads.db"
@@ -21,21 +21,30 @@ def is_valid_room(title):
             return False
     return True
 
+def clean_url(url):
+    if not url: return ""
+    return re.sub(r'\s+', '', url)
+
+def clean_text(text):
+    if not text: return ""
+    return re.sub(r'\s+', ' ', text).strip()
+
 async def scrape_nepremicnine(browser):
     ads = []
     page = await browser.new_page()
     url = "https://www.nepremicnine.net/oglasi-oddaja/ljubljana-mesto/soba/"
     try:
         await page.goto(url, timeout=60000)
-        await page.wait_for_selector("div.oglas_container", timeout=60000)
-        for listing in await page.query_selector_all("div.oglas_container"):
+        await page.wait_for_timeout(5000) 
+        listings = await page.query_selector_all("div.oglas_container")
+        for listing in listings:
             link_el = await listing.query_selector("a")
             if not link_el: continue
-            href = await link_el.get_attribute("href")
+            href = clean_url(await link_el.get_attribute("href"))
             title_el = await listing.query_selector("span.title")
-            title = await title_el.inner_text() if title_el else "Soba"
+            title = clean_text(await title_el.inner_text()) if title_el else "Soba"
             if href and is_valid_room(title):
-                ads.append({"title": title.strip(), "link": urljoin("https://www.nepremicnine.net", href), "source": "Nepremicnine"})
+                ads.append({"title": title, "link": urljoin("https://www.nepremicnine.net", href), "source": "Nepremicnine"})
     except Exception as e:
         print(f"[Nepremicnine] {e}")
     finally:
@@ -48,13 +57,16 @@ async def scrape_kamrica(browser):
     url = "https://kamrica.dostop.si/properties/enoposteljna-soba/ljubljana/"
     try:
         await page.goto(url, timeout=60000)
-        await page.wait_for_selector("a[href*='/properties/']", timeout=60000)
-        for link_el in await page.query_selector_all("a[href*='/properties/']"):
-            href = await link_el.get_attribute("href")
-            if href and href.count("/") > 3:
-                title = await link_el.inner_text()
+        await page.wait_for_timeout(5000)
+        links = await page.query_selector_all("a[href*='/properties/']")
+        seen = set()
+        for link_el in links:
+            href = clean_url(await link_el.get_attribute("href"))
+            if href and href not in seen and href.count("/") > 3:
+                seen.add(href)
+                title = clean_text(await link_el.inner_text()) or "غرفة في Kamrica"
                 if is_valid_room(title):
-                    ads.append({"title": title.strip() or "غرفة في Kamrica", "link": urljoin("https://kamrica.dostop.si", href), "source": "Kamrica"})
+                    ads.append({"title": title, "link": urljoin("https://kamrica.dostop.si", href), "source": "Kamrica"})
     except Exception as e:
         print(f"[Kamrica] {e}")
     finally:
@@ -67,15 +79,16 @@ async def scrape_housinganywhere(browser):
     url = "https://housinganywhere.com/s/Ljubljana--Slovenia/room"
     try:
         await page.goto(url, timeout=60000)
-        await page.wait_for_selector("a[href*='/room/']", timeout=60000)
+        await page.wait_for_timeout(5000)
+        links = await page.query_selector_all("a[href*='/room/']")
         seen = set()
-        for link_el in await page.query_selector_all("a[href*='/room/']"):
-            href = await link_el.get_attribute("href")
+        for link_el in links:
+            href = clean_url(await link_el.get_attribute("href"))
             if href and href not in seen:
                 seen.add(href)
-                title = await link_el.inner_text()
+                title = clean_text(await link_el.inner_text())[:80] or "غرفة في HousingAnywhere"
                 if is_valid_room(title):
-                    ads.append({"title": (title.strip()[:80] or "غرفة في HousingAnywhere"), "link": urljoin("https://housinganywhere.com", href), "source": "HousingAnywhere"})
+                    ads.append({"title": title, "link": urljoin("https://housinganywhere.com", href), "source": "HousingAnywhere"})
     except Exception as e:
         print(f"[HousingAnywhere] {e}")
     finally:
@@ -88,15 +101,16 @@ async def scrape_bolha(browser):
     url = "https://www.bolha.com/oddaja-sob"
     try:
         await page.goto(url, timeout=60000)
-        await page.wait_for_selector("a[href*='/oglas/']", timeout=60000)
+        await page.wait_for_timeout(5000)
+        links = await page.query_selector_all("a[href*='/oglas/']")
         seen = set()
-        for link_el in await page.query_selector_all("a[href*='/oglas/']"):
-            href = await link_el.get_attribute("href")
+        for link_el in links:
+            href = clean_url(await link_el.get_attribute("href"))
             if href and href not in seen:
                 seen.add(href)
-                title = await link_el.inner_text()
-                if is_valid_room(title) and title.strip():
-                    ads.append({"title": (title.strip()[:80] or "غرفة في Bolha"), "link": urljoin("https://www.bolha.com", href), "source": "Bolha"})
+                title = clean_text(await link_el.inner_text())[:80] or "غرفة في Bolha"
+                if is_valid_room(title):
+                    ads.append({"title": title, "link": urljoin("https://www.bolha.com", href), "source": "Bolha"})
     except Exception as e:
         print(f"[Bolha] {e}")
     finally:
@@ -130,7 +144,7 @@ async def main():
 
     all_ads = []
     async with async_playwright() as p:
-        browser = await p.firefox.launch(headless=True)
+        browser = await p.chromium.launch(headless=True)
         
         print("جاري فحص Nepremicnine...")
         all_ads.extend(await scrape_nepremicnine(browser))
