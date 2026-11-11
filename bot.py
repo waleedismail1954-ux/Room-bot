@@ -46,7 +46,7 @@ async def scrape_nepremicnine(browser):
             if href and is_valid_room(title):
                 ads.append({"title": title, "link": urljoin("https://www.nepremicnine.net", href), "source": "Nepremicnine"})
     except Exception as e:
-        print(f"[Nepremicnine] {e}")
+        print(f"[Nepremicnine] خطأ: {e}")
     finally:
         await page.close()
     return ads
@@ -68,7 +68,7 @@ async def scrape_kamrica(browser):
                 if is_valid_room(title):
                     ads.append({"title": title, "link": urljoin("https://kamrica.dostop.si", href), "source": "Kamrica"})
     except Exception as e:
-        print(f"[Kamrica] {e}")
+        print(f"[Kamrica] خطأ: {e}")
     finally:
         await page.close()
     return ads
@@ -90,7 +90,7 @@ async def scrape_housinganywhere(browser):
                 if is_valid_room(title):
                     ads.append({"title": title, "link": urljoin("https://housinganywhere.com", href), "source": "HousingAnywhere"})
     except Exception as e:
-        print(f"[HousingAnywhere] {e}")
+        print(f"[HousingAnywhere] خطأ: {e}")
     finally:
         await page.close()
     return ads
@@ -112,7 +112,7 @@ async def scrape_bolha(browser):
                 if is_valid_room(title):
                     ads.append({"title": title, "link": urljoin("https://www.bolha.com", href), "source": "Bolha"})
     except Exception as e:
-        print(f"[Bolha] {e}")
+        print(f"[Bolha] خطأ: {e}")
     finally:
         await page.close()
     return ads
@@ -147,24 +147,34 @@ async def main():
         browser = await p.chromium.launch(headless=True)
         
         print("جاري فحص Nepremicnine...")
-        all_ads.extend(await scrape_nepremicnine(browser))
+        res_nep = await scrape_nepremicnine(browser)
+        print(f"--> وجد في Nepremicnine: {len(res_nep)} غرفة")
+        all_ads.extend(res_nep)
+        
         print("جاري فحص Kamrica...")
-        all_ads.extend(await scrape_kamrica(browser))
+        res_kam = await scrape_kamrica(browser)
+        print(f"--> وجد في Kamrica: {len(res_kam)} غرفة")
+        all_ads.extend(res_kam)
+        
         print("جاري فحص HousingAnywhere...")
-        all_ads.extend(await scrape_housinganywhere(browser))
+        res_hou = await scrape_housinganywhere(browser)
+        print(f"--> وجد في HousingAnywhere: {len(res_hou)} غرفة")
+        all_ads.extend(res_hou)
+        
         print("جاري فحص Bolha...")
-        all_ads.extend(await scrape_bolha(browser))
+        res_bol = await scrape_bolha(browser)
+        print(f"--> وجد في Bolha: {len(res_bol)} غرفة")
+        all_ads.extend(res_bol)
         
         await browser.close()
 
-    print(f"إجمالي الإعلانات: {len(all_ads)}")
+    print(f"إجمالي الإعلانات المكتشفة: {len(all_ads)}")
     new_count = 0
     
     for ad in all_ads:
         if is_new_ad(ad["link"]):
             msg = f"<b>🏠 إعلان غرفة جديد ({ad['source']})</b>\n\n<b>العنوان:</b> {ad['title']}\n<a href='{ad['link']}'>🔗 اضغط لعرض الإعلان</a>"
             
-            # نظام إعادة المحاولة (3 محاولات)
             success = False
             for attempt in range(3):
                 try:
@@ -172,12 +182,11 @@ async def main():
                     mark_ad_as_sent(ad["link"], ad["source"])
                     new_count += 1
                     success = True
-                    break  # إذا نجح الإرسال، اخرج من حلقة المحاولات
+                    break
                 except Exception as e:
                     print(f"فشل إرسال (محاولة {attempt+1}): {e}")
-                    await asyncio.sleep(3) # انتظر 3 ثوانٍ قبل المحاولة مرة أخرى
+                    await asyncio.sleep(3)
             
-            # انتظر ثانيتين قبل الانتقال للإعلان التالي
             await asyncio.sleep(2)
 
     print(f"تم إرسال {new_count} إعلاناً جديداً.")
