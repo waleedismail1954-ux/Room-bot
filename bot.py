@@ -159,16 +159,26 @@ async def main():
 
     print(f"إجمالي الإعلانات: {len(all_ads)}")
     new_count = 0
+    
     for ad in all_ads:
         if is_new_ad(ad["link"]):
             msg = f"<b>🏠 إعلان غرفة جديد ({ad['source']})</b>\n\n<b>العنوان:</b> {ad['title']}\n<a href='{ad['link']}'>🔗 اضغط لعرض الإعلان</a>"
-            try:
-                await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode=ParseMode.HTML)
-                mark_ad_as_sent(ad["link"], ad["source"])
-                new_count += 1
-                await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"فشل إرسال: {e}")
+            
+            # نظام إعادة المحاولة (3 محاولات)
+            success = False
+            for attempt in range(3):
+                try:
+                    await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode=ParseMode.HTML, read_timeout=30, write_timeout=30)
+                    mark_ad_as_sent(ad["link"], ad["source"])
+                    new_count += 1
+                    success = True
+                    break  # إذا نجح الإرسال، اخرج من حلقة المحاولات
+                except Exception as e:
+                    print(f"فشل إرسال (محاولة {attempt+1}): {e}")
+                    await asyncio.sleep(3) # انتظر 3 ثوانٍ قبل المحاولة مرة أخرى
+            
+            # انتظر ثانيتين قبل الانتقال للإعلان التالي
+            await asyncio.sleep(2)
 
     print(f"تم إرسال {new_count} إعلاناً جديداً.")
 
